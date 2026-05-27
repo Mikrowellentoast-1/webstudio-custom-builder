@@ -54,8 +54,16 @@ RUN echo "=== animation lib first 3 lines ===" \
     && node -e "const p=JSON.parse(require('fs').readFileSync('packages/sdk-components-animation/package.json')); console.log('type:', p.type, '| exports[.]:', JSON.stringify(p.exports['.']))"
 
 # Step 3: Build ONLY the builder — NOT its workspace deps.
-# With BUILDKIT_PROGRESS=plain in the workflow all output is streamed directly.
-RUN pnpm --filter=@webstudio-is/builder build
+# Run silently, save exit code, then cat the log so the error appears at the
+# BOTTOM of the Docker layer output (last lines visible in any GHA screenshot).
+RUN sh -c ' \
+    pnpm --filter=@webstudio-is/builder build > /tmp/build.log 2>&1; \
+    RC=$?; \
+    echo "=== BUILD OUTPUT (exit $RC) ==="; \
+    cat /tmp/build.log; \
+    echo "=== END BUILD OUTPUT ==="; \
+    exit $RC \
+'
 
 # Step 4: Fail loudly if animation code didn't make it into the bundle
 RUN grep -rl 'AnimationGroup\|wsAnimation\|animationGroup' /build/apps/builder/build/client/assets/ \
