@@ -28,7 +28,9 @@ RUN node -e " \
     const ensureStub = (full) => { \
         if (!fs.existsSync(full)) { \
             fs.mkdirSync(path.dirname(full), { recursive: true }); \
-            fs.writeFileSync(full, ''); \
+            const base = path.basename(full).replace(/\\.(m?js)$/, ''); \
+            const src = '../src/' + base + '.ts'; \
+            fs.writeFileSync(full, 'export * from \\'' + src + '\\';\n'); \
             n++; \
         } \
     }; \
