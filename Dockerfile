@@ -46,10 +46,25 @@ RUN curl -fsSL \
 # Verify lib files are present
 RUN ls packages/sdk-components-animation/lib/
 
+# Debug: show first imports in lib/components.js so we can trace dep issues
+RUN echo "=== lib/components.js first 5 lines ===" \
+    && head -5 packages/sdk-components-animation/lib/components.js \
+    && echo "=== apps/builder package.json build script ===" \
+    && node -e "const p=JSON.parse(require('fs').readFileSync('apps/builder/package.json')); console.log(JSON.stringify(p.scripts,null,2))"
+
 # Step 3: Build ONLY the builder — NOT its workspace deps.
-# Using ... (include-deps) tries to build the animation package from TS source
-# which we don't have. Without ... Vite bundles the compiled lib/ directly.
-RUN pnpm --filter=@webstudio-is/builder build
+# Output is captured; on failure the tail is printed at the bottom of the log
+# so it's visible in the GHA screenshot rather than buried in 500+ lines.
+RUN pnpm --filter=@webstudio-is/builder build > /tmp/build.log 2>&1 \
+    || (echo "" \
+        && echo "╔══════════════════════════════════════════╗" \
+        && echo "║  BUILD FAILED — last 120 lines of output  ║" \
+        && echo "╚══════════════════════════════════════════╝" \
+        && tail -120 /tmp/build.log \
+        && echo "╔══════════════════════════════════════════╗" \
+        && echo "║              END BUILD LOG               ║" \
+        && echo "╚══════════════════════════════════════════╝" \
+        && exit 1)
 
 # Step 4: Fail loudly if animation code didn't make it into the bundle
 RUN grep -rl 'AnimationGroup\|wsAnimation\|animationGroup' /build/apps/builder/build/client/assets/ \
