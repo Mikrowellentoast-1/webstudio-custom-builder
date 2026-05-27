@@ -1,16 +1,16 @@
 # ── Stage 1: Build ────────────────────────────────────────────────────────────
 FROM node:22-alpine AS builder
 
-RUN apk add --no-cache git python3 make g++ curl
-RUN corepack enable && corepack prepare pnpm@9.14.4 --activate
+RUN echo ">>> APK ADD" && apk add --no-cache git python3 make g++ curl && echo "<<< APK DONE"
+RUN echo ">>> COREPACK" && corepack enable && corepack prepare pnpm@9.14.4 --activate && echo "<<< COREPACK DONE"
 
 WORKDIR /build
-RUN git clone --depth=1 https://github.com/webstudio-community/webstudio-fork.git .
+RUN echo ">>> GIT CLONE" && git clone --depth=1 https://github.com/webstudio-community/webstudio-fork.git . && echo "<<< GIT CLONE DONE"
 
 ENV NODE_OPTIONS=--max-old-space-size=6144
 
 # Step 1: Install with original stub — avoids dep-version conflicts
-RUN pnpm install --frozen-lockfile
+RUN echo ">>> PNPM INSTALL" && pnpm install --frozen-lockfile && echo "<<< PNPM INSTALL DONE"
 
 # Step 2: Patch animation package AFTER install.
 # Strip "webstudio" conditions (point to TS source we don't have) so Vite
