@@ -9,14 +9,12 @@ RUN git clone --depth=1 https://github.com/webstudio-community/webstudio-fork.gi
 
 ENV NODE_OPTIONS=--max-old-space-size=6144
 
-# Step 1: Install with the original empty stub — no dep-version conflicts
+# Step 1: Install with original stub — avoids dep-version conflicts
 RUN pnpm install --frozen-lockfile
 
-# Step 2: AFTER install, patch animation stub with real compiled code.
-#
-# The npm package exports have "webstudio" conditions pointing to TypeScript
-# source files (./src/*.ts) which we don't have. We strip those conditions so
-# Vite falls through to "import: ./lib/components.js" (the compiled ESM).
+# Step 2: Patch animation package AFTER install.
+# Strip "webstudio" conditions (point to TS source we don't have) so Vite
+# uses the "import" condition → ./lib/components.js (compiled ESM from npm).
 RUN curl -fsSL \
     "https://registry.npmjs.org/@webstudio-is/sdk-components-animation/-/sdk-components-animation-0.267.0.tgz" \
     -o /tmp/animation.tgz \
@@ -41,12 +39,22 @@ RUN curl -fsSL \
         if (npm.main)  stub.main  = npm.main; \
         if (npm.types) stub.types = npm.types; \
         fs.writeFileSync('packages/sdk-components-animation/package.json', JSON.stringify(stub, null, 2)); \
-        console.log('Patched exports:', JSON.stringify(stub.exports, null, 2)); \
+        console.log('Patched. exports:', JSON.stringify(stub.exports['.'], null, 2)); \
     " \
     && rm -rf /tmp/package /tmp/animation.tgz
 
-# Step 3: Build — Vite now resolves lib/components.js instead of missing TS source
-RUN pnpm --filter=@webstudio-is/builder... build
+# Verify lib files are present
+RUN ls packages/sdk-components-animation/lib/
+
+# Step 3: Build ONLY the builder — NOT its workspace deps.
+# Using ... (include-deps) tries to build the animation package from TS source
+# which we don't have. Without ... Vite bundles the compiled lib/ directly.
+RUN pnpm --filter=@webstudio-is/builder build
+
+# Step 4: Fail loudly if animation code didn't make it into the bundle
+RUN grep -rl 'AnimationGroup\|wsAnimation\|animationGroup' /build/apps/builder/build/client/assets/ \
+    | grep -q . \
+    || (echo "ERROR: Animation code not found in bundle — patch failed" && exit 1)
 
 # ── Stage 2: Production ───────────────────────────────────────────────────────
 FROM ghcr.io/webstudio-community/builder:latest
