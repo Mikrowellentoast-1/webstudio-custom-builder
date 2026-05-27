@@ -38,6 +38,7 @@ RUN curl -fsSL \
         } \
         if (npm.main)  stub.main  = npm.main; \
         if (npm.types) stub.types = npm.types; \
+        if (npm.type)  stub.type  = npm.type; \
         fs.writeFileSync('packages/sdk-components-animation/package.json', JSON.stringify(stub, null, 2)); \
         console.log('Patched. exports:', JSON.stringify(stub.exports['.'], null, 2)); \
     " \
@@ -46,25 +47,15 @@ RUN curl -fsSL \
 # Verify lib files are present
 RUN ls packages/sdk-components-animation/lib/
 
-# Debug: show first imports in lib/components.js so we can trace dep issues
-RUN echo "=== lib/components.js first 5 lines ===" \
-    && head -5 packages/sdk-components-animation/lib/components.js \
-    && echo "=== apps/builder package.json build script ===" \
-    && node -e "const p=JSON.parse(require('fs').readFileSync('apps/builder/package.json')); console.log(JSON.stringify(p.scripts,null,2))"
+# Debug: show animation lib state before build
+RUN echo "=== animation lib first 3 lines ===" \
+    && head -3 packages/sdk-components-animation/lib/components.js \
+    && echo "=== patched exports ===" \
+    && node -e "const p=JSON.parse(require('fs').readFileSync('packages/sdk-components-animation/package.json')); console.log('type:', p.type, '| exports[.]:', JSON.stringify(p.exports['.']))"
 
 # Step 3: Build ONLY the builder — NOT its workspace deps.
-# Output is captured; on failure the tail is printed at the bottom of the log
-# so it's visible in the GHA screenshot rather than buried in 500+ lines.
-RUN pnpm --filter=@webstudio-is/builder build > /tmp/build.log 2>&1 \
-    || (echo "" \
-        && echo "╔══════════════════════════════════════════╗" \
-        && echo "║  BUILD FAILED — last 120 lines of output  ║" \
-        && echo "╚══════════════════════════════════════════╝" \
-        && tail -120 /tmp/build.log \
-        && echo "╔══════════════════════════════════════════╗" \
-        && echo "║              END BUILD LOG               ║" \
-        && echo "╚══════════════════════════════════════════╝" \
-        && exit 1)
+# With BUILDKIT_PROGRESS=plain in the workflow all output is streamed directly.
+RUN pnpm --filter=@webstudio-is/builder build
 
 # Step 4: Fail loudly if animation code didn't make it into the bundle
 RUN grep -rl 'AnimationGroup\|wsAnimation\|animationGroup' /build/apps/builder/build/client/assets/ \
